@@ -47,14 +47,8 @@ typedef struct
 
 typedef struct
 {
-    int clock_hand;
-} ClockState;
-
-typedef struct
-{
     char** keys;
     CacheValue** values;
-    ClockState clock;
 } CacheArray;
 
 typedef struct
@@ -65,6 +59,7 @@ typedef struct
     int hash_size;
     int hash_used;
     void (*value_free)(void*);
+    int clock_hand;
     SemaphoreHandle_t lock;
 } RefBitClockCache;
 
@@ -130,7 +125,7 @@ RefBitClockCache* createCache(int cache_size, void (*value_free)(void*))
     {
         memset(cache->cache.values, 0, cache_size * sizeof(CacheValue*));
     }
-    cache->cache.clock.clock_hand = 0;
+    cache->clock_hand = 0;
     cache->hash_size = next_prime(cache_size * 2);
     cache->hash_table = (HashEntry*)malloc(cache->hash_size * sizeof(HashEntry));
     if (cache->hash_table)
@@ -173,34 +168,34 @@ void printCacheState(RefBitClockCache* cache)
                                cv ? cv->ref_bit : 0);
         }
     }
-    ESP_LOGI(TAG, "Cache state (hand=%d): %s", cache->cache.clock.clock_hand, state);
+    ESP_LOGI(TAG, "Cache state (hand=%d): %s", cache->clock_hand, state);
 }
 
 static int findClockVictim(RefBitClockCache* cache)
 {
-    int start_hand = cache->cache.clock.clock_hand;
+    int start_hand = cache->clock_hand;
     int attempts = 0;
     int max_attempts = cache->cache_size * 2;
 
     while (attempts < max_attempts)
     {
-        int idx = cache->cache.clock.clock_hand;
+        int idx = cache->clock_hand;
         CacheValue* cv = cache->cache.values[idx];
 
         if (!cv || !cache->cache.keys[idx])
         {
-            cache->cache.clock.clock_hand = (idx + 1) % cache->cache_size;
+            cache->clock_hand = (idx + 1) % cache->cache_size;
             return idx;
         }
 
         if (cv->refcount == 0 && cv->ref_bit == 0)
         {
-            cache->cache.clock.clock_hand = (idx + 1) % cache->cache_size;
+            cache->clock_hand = (idx + 1) % cache->cache_size;
             return idx;
         }
 
         cv->ref_bit = 0;
-        cache->cache.clock.clock_hand = (idx + 1) % cache->cache_size;
+        cache->clock_hand = (idx + 1) % cache->cache_size;
         attempts++;
     }
 
