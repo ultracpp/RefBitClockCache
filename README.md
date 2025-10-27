@@ -51,7 +51,21 @@ This code is a complete ESP-IDF project example. To build and flash it to an ESP
 
    ```sh
    idf.py -p COM5 -b 115200 flash monitor
+   ```
+### Integrating into Your Project
+
+- Include `refbit_clock_cache.h` in any source file where you want to use the cache.
+- Call `createCache()` to initialize with a desired size and a custom free function (or use the default `freeValue()`).
+- Use `accessCache()` to get or insert data (returns a `CacheValue*` with refcount incremented).
+- Always call `releaseValue()` when done with the `CacheValue*` to decrement refcount.
+- Call `freeCache()` to clean up the entire cache.
 
 ### Example Log Output
 
 The log output provides real-time insight into the cache's operation, showing hits, misses, and the state of the cache.
+```
+I (12345) RefBitClockCache: Cache hit → key: A in line 0 ref=2, bit=1
+I (12346) RefBitClockCache: Cache state (hand=1): [0: A, ref=2, bit=1] [1: B, ref=1, bit=1]
+I (12347) RefBitClockCache: Cache miss → stored key: C in line 2 ref=1, bit=1 (victim was 2)
+I (12348) RefBitClockCache: Cache state (hand=3): [0: A, ref=2, bit=1] [1: B, ref=1, bit=1] [2: C, ref=1, bit=1]
+```
