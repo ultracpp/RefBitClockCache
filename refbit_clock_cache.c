@@ -25,13 +25,6 @@
 #include <freertos/semphr.h>
 #include <esp_random.h>
 
-typedef struct
-{
-    char* key;
-    int cache_index;
-    int state;
-} HashEntry;
-
 static void cache_lock(RefBitClockCache* c)
 {
     xSemaphoreTake(c->lock, portMAX_DELAY);
@@ -42,7 +35,7 @@ static void cache_unlock(RefBitClockCache* c)
     xSemaphoreGive(c->lock);
 }
 
-static unsigned int next_prime(unsigned int n)
+unsigned int next_prime(unsigned int n)
 {
     while (1)
     {
@@ -63,7 +56,7 @@ static unsigned int next_prime(unsigned int n)
     }
 }
 
-static unsigned int hash(const char* key, int hash_size)
+unsigned int hash(const char* key, int hash_size)
 {
     unsigned int h = 2166136261u;
     while (*key)
@@ -95,23 +88,22 @@ RefBitClockCache* createCache(int cache_size, void (*value_free)(void*))
         memset(cache->cache.values, 0, cache_size * sizeof(CacheValue*));
     }
     cache->clock_hand = 0;
+    cache->hash_size = next_prime(cache_size * 2);
+    cache->hash_table = (HashEntry*)malloc(cache->hash_size * sizeof(HashEntry));
+    if (cache->hash_table)
+    {
+        memset(cache->hash_table, 0, cache->hash_size * sizeof(HashEntry));
+    }
+    cache->hash_used = 0;
     cache->value_free = value_free;
 
-    // Hash table setup
-    int hash_size = next_prime(cache_size * 2);
-    HashEntry* hash_table = (HashEntry*)malloc(hash_size * sizeof(HashEntry));
-    if (hash_table)
-    {
-        memset(hash_table, 0, hash_size * sizeof(HashEntry));
-    }
-
     cache->lock = xSemaphoreCreateMutex();
-    if (!cache->lock || !cache->cache.keys || !cache->cache.values || !hash_table)
+    if (!cache->lock || !cache->cache.keys || !cache->cache.values || !cache->hash_table)
     {
         ESP_LOGE(CACHE_TAG, "Failed to allocate cache resources");
         free(cache->cache.keys);
         free(cache->cache.values);
-        free(hash_table);
+        free(cache->hash_table);
         if (cache->lock)
         {
             vSemaphoreDelete(cache->lock);
@@ -181,7 +173,7 @@ static int findClockVictim(RefBitClockCache* cache)
     return start_hand;
 }
 
-static void rehash(RefBitClockCache* cache)
+void rehash(RefBitClockCache* cache)
 {
     int old_size = cache->hash_size;
     HashEntry* old_table = cache->hash_table;
@@ -214,7 +206,7 @@ static void rehash(RefBitClockCache* cache)
     free(old_table);
 }
 
-static void insertHash(RefBitClockCache* cache, char* key, int idx)
+void insertHash(RefBitClockCache* cache, char* key, int idx)
 {
     if ((cache->hash_used * 10) / cache->hash_size >= 7)
     {
@@ -256,7 +248,7 @@ static void insertHash(RefBitClockCache* cache, char* key, int idx)
     }
 }
 
-static void eraseHash(RefBitClockCache* cache, const char* key)
+void eraseHash(RefBitClockCache* cache, const char* key)
 {
     unsigned int h = hash(key, cache->hash_size);
 
@@ -273,7 +265,7 @@ static void eraseHash(RefBitClockCache* cache, const char* key)
     }
 }
 
-static int getCacheIndex(RefBitClockCache* cache, const char* key)
+int getCacheIndex(RefBitClockCache* cache, const char* key)
 {
     unsigned int h = hash(key, cache->hash_size);
 
