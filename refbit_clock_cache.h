@@ -39,6 +39,13 @@ typedef struct
 
 typedef struct
 {
+    char* key;
+    int cache_index;
+    int state;
+} HashEntry;
+
+typedef struct
+{
     char** keys;
     CacheValue** values;
 } CacheArray;
@@ -47,6 +54,9 @@ typedef struct
 {
     int cache_size;
     CacheArray cache;
+    HashEntry* hash_table;
+    int hash_size;
+    int hash_used;
     void (*value_free)(void*);
     int clock_hand;
     SemaphoreHandle_t lock;
